@@ -4,7 +4,7 @@ Parameters:
     Type: String
     Default: ""
 Conditions:
-  UseVpc: !Not [!Equals [!Ref VpcId, '']]
+  UseVpc: !Equals [!Ref VpcId, '']
 Resources:
   Network:
     Type: AWS::CloudFormation::Stack
