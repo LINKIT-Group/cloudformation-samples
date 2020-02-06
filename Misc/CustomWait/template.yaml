@@ -1,0 +1,175 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: ExampleCode for CustomWait implementation
+Resources:
+
+  Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Suspended
+      LifecycleConfiguration:
+        Rules:
+        - ExpirationInDays: 1
+          Status: Enabled
+        - NoncurrentVersionExpirationInDays: 1
+          Status: Disabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+
+  EmptyBucketLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.8
+      Handler: empty_bucket.handler
+      Timeout: 59
+      Policies:
+      - Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+            - s3:List*
+            - s3:DeleteObject
+            - s3:DeleteObjectVersion
+            Resource:
+            - !Sub ${Bucket.Arn}
+            - !Sub ${Bucket.Arn}/*
+      CodeUri: src
+
+  EmptyBucket:
+    Type: Custom::EmptyBucket
+    Properties:
+      ServiceToken: !GetAtt EmptyBucketLambda.Arn
+      BucketName: !Ref Bucket
+
+  CustomWaitLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+
+  CustomWaitPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: ReadListDeleteObjects
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Action:
+          - logs:CreateLogGroup
+          - logs:CreateLogStream
+          - logs:PutLogEvents
+          Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
+        - Effect: Allow
+          Action:
+          - events:PutRule
+          - events:DescribeRule
+          - events:PutTargets
+          - events:DeleteRule
+          - events:ListTargetsByRule
+          - events:RemoveTargets
+          Resource: !Sub 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/*'
+        - Effect: Allow
+          Action:
+          - s3:PutObject
+          - s3:List*
+          - s3:GetObject
+          - s3:DeleteObject
+          Resource:
+          - !Sub '${Bucket.Arn}/${CustomWaitLambda}'
+          - !Sub '${Bucket.Arn}/${CustomWaitLambda}/*'
+        - Effect: Allow
+          Action:
+          - s3:GetBucketLocation
+          Resource: !GetAtt Bucket.Arn
+        - Effect: Allow
+          Action:
+          - lambda:InvokeFunction
+          Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*'
+      Roles:
+      - !Ref CustomWaitLambdaRole
+
+  CustomWaitLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.8
+      Handler: custom_wait.handler
+      Role: !GetAtt CustomWaitLambdaRole.Arn
+      Timeout: 59
+      CodeUri: src
+
+  CustomWaitLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties: 
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt CustomWaitLambda.Arn
+      Principal: events.amazonaws.com
+
+  InvokeExampleLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Policies:
+      - PolicyName: WriteCloudwatchLogs
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: 'arn:aws:logs:*:*:*'
+      - PolicyName: SsmParameterAccess
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - ssm:PutParameter
+            - ssm:DeleteParameter
+            Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/*'
+          - Effect: Allow
+            Action:
+            - ssm:DescribeParameters
+            Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*'
+
+  InvokeExampleLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.8
+      Handler: invoke_example.handler
+      Role: !GetAtt InvokeExampleLambdaRole.Arn
+      Timeout: 59
+      CodeUri: src
+
+  CustomWait:
+    Type: Custom::CustomWait
+    Properties:
+      ServiceToken: !GetAtt CustomWaitLambda.Arn
+      S3Bucket: !Ref Bucket
+      S3Prefix: !Ref CustomWaitLambda 
+      PauseTimeInMinutes: 1
+      TimeoutInMinutes: 20
+      Probes:
+      - Provider: Lambda
+        Properties:
+          ServiceToken: !GetAtt InvokeExampleLambda.Arn
+    DependsOn:
+    - CustomWaitPolicy
