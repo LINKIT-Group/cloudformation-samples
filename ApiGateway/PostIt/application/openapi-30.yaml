@@ -1,0 +1,153 @@
+openapi: 3.0.2
+info:
+  title: Post message
+  description: Example of a post method integrated with apigateway
+  version: "2020-01-01"
+
+x-amazon-apigateway-request-validators:
+  all:
+    validateRequestBody: true
+    validateRequestParameters: true
+x-amazon-apigateway-request-validator: all
+
+paths:
+  /message:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/PostMessage'
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PostFunction.Arn}/invocations"
+        passthroughBehavior: NEVER
+        httpMethod: POST
+        type: aws
+        requestTemplates:
+          application/x-www-form-urlencoded: |
+            #set($httpPost = $input.path('$').split("&"))
+            {
+              "body": {
+                #foreach( $kvPair in $httpPost )
+                 #set($kvTokenised = $kvPair.split("="))
+                 #if( $kvTokenised.size() > 1 )
+                   "$kvTokenised[0]" : "$kvTokenised[1]"#if( $foreach.hasNext ),#end
+                 #else
+                   "$kvTokenised[0]" : ""#if( $foreach.hasNext ),#end
+                 #end
+                #end
+              },
+              "stageVariables" : {
+                #foreach($key in $stageVariables.keySet())
+                "$key" : "$util.escapeJavaScript($stageVariables.get($key))"
+                #if($foreach.hasNext),#end
+              #end
+              },
+              "requestContext" : {
+                "identity": {
+                  "sourceIp" : "$context.identity.sourceIp",
+                  "userAgent" : "$context.identity.userAgent"
+                }
+              }
+            }
+          application/json: |
+            #set($allParams = $input.params())
+            {
+              "body" : $input.json('$'),
+              "stageVariables" : {
+                #foreach($key in $stageVariables.keySet())
+                "$key" : "$util.escapeJavaScript($stageVariables.get($key))"
+                #if($foreach.hasNext),#end
+              #end
+              },
+              "requestContext" : {
+                "identity": {
+                  "sourceIp" : "$context.identity.sourceIp",
+                  "userAgent" : "$context.identity.userAgent"
+                }
+              }
+            }
+        # https://docs.aws.amazon.com/lambda/latest/dg/python-exceptions.html
+        responses:
+          "^ValueError__.*":
+            statusCode: 400
+            responseTemplates:
+              application/json: |
+                {"errorMessage": "$input.path('$.errorMessage')"}
+          "^Exception__.*":
+            statusCode: 500
+            responseTemplates:
+              application/json: |
+                {"errorMessage": "$input.path('$.errorMessage')"}
+          default:
+            statusCode: 200
+      responses:
+        "200":
+          $ref: '#/components/responses/2xxSuccess'
+        "400":
+          $ref: '#/components/responses/4xxError'
+        "500":
+          $ref: '#/components/responses/5xxError'
+components:
+  requestBodies:
+    PostMessage:
+      description: Post a Message
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PostMessage'
+  responses:
+    2xxSuccess:
+      description: "200 response"
+      schema:
+        $ref: '#/components/schemas/Response'
+      headers:
+        Content-Length:
+          type: string
+        Content-Type:
+          type: string
+    4xxError:
+      description: "4xx Error"
+      schema:
+        $ref: '#/components/schemas/ErrorMessage'
+      headers:
+        Content-Length:
+          type: string
+        Content-Type:
+          type: string
+    5xxError:
+      description: "5xx Error"
+      schema:
+        $ref: '#/components/schemas/ErrorMessage'
+      headers:
+        Content-Length:
+          type: string
+        Content-Type:
+          type: string
+  schemas:
+    String:
+      type: string
+    LongNumber:
+      type: integer
+      format: int64
+    ErrorMessage:
+      type: object
+      properties:
+        errorMessage:
+          $ref: '#/components/schemas/String'
+    PostMessage:
+      type: object
+      properties:
+        Message:
+          $ref: '#/components/schemas/String'
+      required:
+        - Message
+    Response:
+      type: object
+      properties:
+        EventTime:
+          $ref: '#/components/schemas/LongNumber'
+        SourceIP:
+          $ref: '#/components/schemas/String'
+        UserAgent:
+          $ref: '#/components/schemas/String'
+        Message:
+          $ref: '#/components/schemas/String'

@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  Creates API Gateway and a simple Lambda Function
+Parameters:
+  Stage:
+    Type: String
+Resources:
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      OpenApiVersion: 3.0.2
+      DefinitionBody:
+        Fn::Transform:
+          Name: AWS::Include
+          Parameters:
+            Location: openapi-30.yaml
+  PostFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.8
+      MemorySize: 128
+      Handler: post.handler
+      CodeUri: src/post
+  PostFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties: 
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt PostFunction.Arn
+      Principal: apigateway.amazonaws.com
+Outputs:
+  Url:
+    Description: Endpoint URL
+    Value: !Sub https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${Stage}

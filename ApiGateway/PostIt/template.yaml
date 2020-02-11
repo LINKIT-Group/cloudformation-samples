@@ -1,0 +1,15 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: Root stack
+Resources:
+  Application:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: application/template.yaml
+      Parameters:
+        Stage: prod
+Outputs:
+  EndpointUrl:
+    Value: !GetAtt Application.Outputs.Url
+  EndpointUrlCopy:
+    Value: !GetAtt Application.Outputs.Url
