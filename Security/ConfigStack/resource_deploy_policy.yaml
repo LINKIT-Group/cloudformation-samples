@@ -1,0 +1,33 @@
+# this document describes what the CloudFormation Deploy Role is allowed to do
+# limit this as much as possible, don't forget to test on full deploy-update-delete cyle
+# iam:-actions listed are a supplemental requirement to IamWithBoundary Policy
+Version: '2012-10-17'
+Statement:
+- Effect: Allow
+  Action:
+  - iam:GetRolePolicy
+  - iam:DeleteRole
+  - iam:GetRole
+  - iam:TagRole
+  - iam:UntagRole
+  - iam:PassRole
+  Resource: '*'
+- Effect: Allow
+  Action:
+  - lambda:CreateFunction
+  - lambda:TagResource
+  - lambda:InvokeFunction
+  - lambda:UntagResource
+  - lambda:DeleteFunction
+  - lambda:GetFunctionConfiguration
+  - lambda:GetFunction
+  Resource: '*'
+- Effect: Allow
+  Action:
+  - s3:CreateBucket
+  - s3:List*
+  - s3:GetEncryptionConfiguration
+  - s3:SetBucketEncryption
+  - s3:DeleteBucket
+  - s3:Put*
+  Resource: '*'
