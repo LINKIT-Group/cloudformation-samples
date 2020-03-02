@@ -1,0 +1,5 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Dummy stack to test if Stack Deployment works
+Resources:
+  Dummy:
+    Type: AWS::CloudFormation::WaitConditionHandle
