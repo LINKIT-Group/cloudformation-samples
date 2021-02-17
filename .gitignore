@@ -1,0 +1,11 @@
+# cache files
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+
+# temp build dir
+build/
+
+# history
+.bash_history
+.python_history

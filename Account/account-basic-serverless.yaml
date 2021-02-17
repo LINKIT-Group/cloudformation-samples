@@ -1,0 +1,150 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Initiate account
+Resources:
+  CfnBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+        - ExpirationInDays: 30
+          Status: Disabled
+        - NoncurrentVersionExpirationInDays: 7
+          Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+
+  BucketEmptyLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Role used to empty an S3 Bucket
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Policies:
+      - PolicyName: EmptyS3Bucket
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:List*
+            - s3:DeleteObject
+            - s3:DeleteObjectVersion
+            Resource:
+            - !Sub ${CfnBucket.Arn}
+            - !Sub ${CfnBucket.Arn}/*
+
+  BucketEmptyLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.7
+      Handler: index.handler
+      Role: !GetAtt BucketEmptyLambdaRole.Arn
+      Code:
+        ZipFile: |            
+          import boto3
+          import cfnresponse
+
+          s3 = boto3.resource('s3')
+
+          def empty_s3(payload):
+              bucket = s3.Bucket(payload['BucketName'])
+              bucket.object_versions.all().delete()
+
+          def handler(event, context):
+              try:
+                  if event['RequestType'] in ['Create', 'Update']:
+                      # do nothing
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS,
+                                       {}, event['LogicalResourceId'])
+                  elif event['RequestType'] in ['Delete']:
+                      empty_s3(event['ResourceProperties'])
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+              except Exception as e:
+                  cfnresponse.send(event, context, "FAILED", {"Message": str(e)})
+
+  CustomCfnBucketEmpty:
+    Type: Custom::CfnBucketEmpty
+    Properties:
+      ServiceToken: !GetAtt BucketEmptyLambda.Arn
+      BucketName: !Ref CfnBucket
+
+  CloudFormationIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Role used by CloudFormation to deploy Resources
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: cloudformation.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Policies:
+      - PolicyName: EmptyS3Bucket
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - cloudformation:CreateChangeSet
+            - cloudformation:DescribeChangeSet
+            - cloudformation:ExecuteChangeSet
+            Resource:
+            - arn:aws:cloudformation:*:*:stack/*/*
+            - arn:aws:cloudformation:*:aws:transform/*
+      ManagedPolicyArns:
+      - !Ref CloudFormationDeployPolicy
+
+  CloudFormationDeployPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Action:
+          - iam:*
+          Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/*
+        - Effect: Allow
+          Action:
+          - lambda:*
+          Resource: '*'
+        - Effect: Allow
+          Action:
+          - s3:*
+          Resource: '*'
+        - Effect: Allow
+          Action:
+          - dynamodb:*
+          Resource: '*'
+        - Effect: Allow
+          Action:
+          - events:*
+          Resource: '*'
+        - Effect: Allow
+          Action:
+          - logs:*
+          Resource:
+          - '*'
+        - Effect: Allow
+          Action:
+          - apigateway:*
+          Resource: '*'
+
+Outputs:
+  CloudFormationIAMRole:
+    Value: !GetAtt CloudFormationIAMRole.Arn
+  S3BucketName:
+    Value: !Ref CfnBucket
