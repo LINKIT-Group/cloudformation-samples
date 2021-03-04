@@ -142,7 +142,7 @@ paths:
                     "name": "$inputRoot.Item.name.S",
                     "size": "$inputRoot.Item.size.S",
                     "age": "$inputRoot.Item.age.N",
-                    "color": "inputRoot.Item.color.S"
+                    "color": "$inputRoot.Item.color.S"
                 }'
         passthroughBehavior: "when_no_match"
         httpMethod: POST
@@ -195,10 +195,7 @@ paths:
                 {
                   "updated": {
                     "id": "$inputRoot.Attributes.id.S",
-                    "name": "$inputRoot.Attributes.name.S",
-                    "size": "$inputRoot.Attributes.size.S",
-                    "age": "$inputRoot.Attributes.age.N",
-                    "color": "$inputRoot.Attributes.color.S"
+                    "name": "$inputRoot.Attributes.name.S"
                   }
                 }'
         passthroughBehavior: 'when_no_match'

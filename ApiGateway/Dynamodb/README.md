@@ -13,7 +13,7 @@ Rootstack Template: ApiGateway/Dynamodb/template.yaml.
 Replace `${EndpointUrl}` by the value retrieved from previous step
 
 ```shell
-curl -X GET https://${EndpointUrl}/prod/dragons
-curl -X POST https://${EndpointUrl}/prod/dragons -d '{"name":"Mushu","color":"red","size":"small","age":23}' -H "Content-Type: application/json"   
-curl -X GET https://${EndpointUrl}/prod/dragon/${dragonId}
+curl -X GET ${EndpointUrl}/dragons
+curl -X POST ${EndpointUrl}/dragons -d '{"name":"Mushu","color":"red","size":"small","age":23}' -H "Content-Type: application/json"   
+curl -X GET ${EndpointUrl}/dragon/${dragonId}
 ``` 
