@@ -1,0 +1,298 @@
+openapi: 3.0.2
+info:
+  title:
+    Dragons Api
+  description:
+    Lambdaless api to get data from DynamoDB
+  version: 1.0.0
+paths:
+  /dragons:
+    get:
+      consumes:
+        - 'application/json'
+      produces:
+        - 'application/json'
+      responses:
+        200:
+          $ref: '#/components/responses/Dragon'
+      x-amazon-apigateway-integration:
+        description: Retrieve all dragons in the database
+        credentials:  { 'Fn::GetAtt': APIRole.Arn }
+        uri: { 'Fn::Sub': 'arn:aws:apigateway:${AWS::Region}:dynamodb:action/Scan' }
+        requestTemplates:
+          application/json:
+            Fn::Sub:
+              - |-
+                {
+                  "TableName": "${tableName}"
+                }
+              - { tableName: { Ref: DragonsTable } }
+        responses:
+          default:
+            statusCode: 200
+            responseTemplates:
+              application/json: '#set($inputRoot = $input.path("$"))
+                          {
+                            "dragons": [
+                              #foreach($elem in $inputRoot.Items) {
+                                "id": "$elem.id.S",
+                                "name": "$elem.name.S",
+                                "size": "$elem.size.S",
+                                "age": "$elem.age.N",
+                                "color": "$elem.color.S"
+                              }#if($foreach.hasNext),#end
+                              #end
+                            ]
+                          }'
+        passthroughBehavior: 'when_no_match'
+        httpMethod: POST
+        type: AWS
+    post:
+      consumes:
+        - 'application/json'
+      produces:
+        - 'application/json'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Dragon'
+      responses:
+        200:
+          $ref: '#/components/responses/Dragon'
+      x-amazon-apigateway-integration:
+        description: Add a new dragon to the database
+        credentials:  { 'Fn::GetAtt': APIRole.Arn }
+        uri: { 'Fn::Sub': 'arn:aws:apigateway:${AWS::Region}:dynamodb:action/PutItem' }
+        requestTemplates:
+          application/json: 
+            Fn::Sub:
+              - |- 
+                { 
+                  "TableName": "${tableName}",
+                  "Item": {
+                    "id": {
+                      "S": "$context.requestId"
+                    },
+                    "name": {
+                      "S": "$input.path("$.name")"
+                    },
+                    "size": {
+                      "S": "$input.path("$.size")"
+                    },
+                    "age": {
+                      "N": "$input.path("$.age")"  
+                    },
+                    "color": {
+                      "S": "$input.path("$.color")"  
+                    }
+                  }
+                }
+              - { tableName: { Ref: DragonsTable } }
+        responses:
+          default:
+            statusCode: 200
+            responseTemplates:
+              application/json: '#set($inputRoot = $input.path("$"))
+                {
+                    "id": "$context.requestId"
+                }'
+        passthroughBehavior: 'when_no_match'
+        httpMethod: POST
+        type: AWS
+  /dragon/{dragonId}:
+    get:
+      consumes:
+        - 'application/json'
+      produces:
+        - 'application/json'
+      parameters:
+        - name: 'dragonId'
+          in: 'path'
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          $ref: '#/components/responses/Dragon'
+      x-amazon-apigateway-integration:
+        description: Retrieve a specific dragon from the database 
+        credentials:  { 'Fn::GetAtt': APIRole.Arn }
+        uri: { 'Fn::Sub': 'arn:aws:apigateway:${AWS::Region}:dynamodb:action/GetItem' }
+        requestTemplates:
+          application/json:
+            Fn::Sub: 
+              - |-
+                { 
+                  "TableName": "${tableName}",
+                  "Key": {
+                          "id": {
+                            "S": "$input.params("dragonId")"
+                          }
+                        }
+                }
+              - { tableName: { Ref: DragonsTable } }
+        responses:
+          default:
+            statusCode: 200
+            responseTemplates:
+              application/json: '#set($inputRoot = $input.path("$"))
+                {
+                    "id": "$inputRoot.Item.id.S",
+                    "name": "$inputRoot.Item.name.S",
+                    "size": "$inputRoot.Item.size.S",
+                    "age": "$inputRoot.Item.age.N",
+                    "color": "inputRoot.Item.color.S"
+                }'
+        passthroughBehavior: "when_no_match"
+        httpMethod: POST
+        type: AWS
+
+    put:
+      consumes:
+        - 'application/json'
+      produces:
+        - 'application/json'
+      parameters:
+        - name: 'dragonId'
+          in: 'path'
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          $ref: '#/components/responses/Dragon'
+      x-amazon-apigateway-integration:
+        description: Update the name of a specific dragon
+        credentials:  { 'Fn::GetAtt': APIRole.Arn }
+        uri: { 'Fn::Sub': 'arn:aws:apigateway:${AWS::Region}:dynamodb:action/UpdateItem' }
+        requestTemplates:
+          application/json: 
+            Fn::Sub: 
+              - |-
+                { 
+                  "TableName": "${tableName}",
+                  "Key": {
+                          "id": {
+                            "S": "$input.params("dragonId")"
+                          }
+                        },
+                  "ExpressionAttributeValues": {
+                    ":n": {"S": "$input.path("$.name")"}
+                        },
+                  "ExpressionAttributeNames": {
+                    "#n": "name"
+                  },
+                  "UpdateExpression": "SET #n = :n",
+                  "ReturnValues": "ALL_NEW"
+                }
+              - { tableName: { Ref: DragonsTable } }
+        responses:
+          default:
+            statusCode: 200
+            responseTemplates:
+              application/json: '#set($inputRoot = $input.path("$"))
+                {
+                  "updated": {
+                    "id": "$inputRoot.Attributes.id.S",
+                    "name": "$inputRoot.Attributes.name.S",
+                    "size": "$inputRoot.Attributes.size.S",
+                    "age": "$inputRoot.Attributes.age.N",
+                    "color": "$inputRoot.Attributes.color.S"
+                  }
+                }'
+        passthroughBehavior: 'when_no_match'
+        httpMethod: POST
+        type: AWS
+
+    delete:
+      consumes:
+        - 'application/json'
+      produces:
+        - 'application/json'
+      parameters:
+      - name: 'dragonsId'
+        in: 'path'
+        required: true
+        schema:
+            type: string
+      responses:
+        200:
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/responses/Dragon'
+      x-amazon-apigateway-integration:
+        description: Delete a specific dragon from the database
+        credentials: { 'Fn::GetAtt': APIRole.Arn}
+        uri: { 'Fn::Sub': 'arn:aws:apigateway:${AWS::Region}:dynamodb:action/DeleteItem' }
+        requestTemplates:
+          application/json:  
+            Fn::Sub: 
+              - |-
+                {
+                  "TableName": "${tableName}",
+                    "Key": {
+                      "id": {
+                        "S": "$input.params("dragonId")"
+                      }
+                    },
+                  "ReturnValues": "ALL_OLD"
+                }
+              - { tableName: { Ref: DragonsTable } }
+        responses:
+          default:
+            statusCode: 200
+            responseTemplates:
+              application/json: '#set($inputRoot = $input.path("$"))
+                {   
+                  "deleted" : {
+                    "id": "$inputRoot.Attributes.id.S",
+                    "name": "$inputRoot.Attributes.name.S",
+                    "size": "$inputRoot.Attributes.size.S",
+                    "age": "$inputRoot.Attributes.age.N",
+                    "color": "$inputRoot.Attributes.color.S"
+                    }
+                }'
+        passthroughBehavior: 'when_no_match'
+        httpMethod: POST
+        type: AWS
+
+components:
+  schemas:
+    Empty:
+      type: object
+      description: Empty Schema
+    Dragon:
+      type: object
+      description: Dragon
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        size:
+          type: string
+        age:
+          type: number
+        color:
+          type: string
+  responses:
+    Dragon:
+      description: Dragon
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              size:
+                type: string
+              age:
+                type: number
+              color:
+                type: string
+                
